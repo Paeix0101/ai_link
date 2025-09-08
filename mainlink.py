@@ -21,11 +21,16 @@ LINKGUARD_MSG = (
     "⚠️ <i>Make this bot an admin (can_delete_messages) so it can protect the group.</i>"
 )
 
-# Anti-link warning
+# Anti-link warnings
 ANTILINK_MSG = (
     "<b>Anti Link Spam </b>\n"
     "<i>Hidden and Non hidden links are not allowed in this group </i>\n"
     "Please contact an admin for any queries"
+)
+
+ANTIFWD_MSG = (
+    "<b>Anti Link Spam </b>\n"
+    "<b>Please Hide Sender Name and forward </b>"
 )
 
 # ---------- Helpers ----------
@@ -62,7 +67,10 @@ def is_admin(chat_id: int, user_id: int) -> bool:
 
 def contains_link(text: str) -> bool:
     # Simple regex to detect links/domains
-    link_pattern = re.compile(r"(https?://\S+|www\.\S+|\S+\.(com|net|org|info|io|me)|t\.me/\S+)", re.IGNORECASE)
+    link_pattern = re.compile(
+        r"(https?://\S+|www\.\S+|\S+\.(com|net|org|info|io|me)|t\.me/\S+)",
+        re.IGNORECASE,
+    )
     return bool(link_pattern.search(text))
 
 # ---------- Webhook ----------
@@ -86,20 +94,31 @@ def webhook():
     message_id = msg.get("message_id")
 
     # ✅ /start in private
-    if text and text.strip().lower().startswith("/start") and chat_id and chat_type == "private":
+    if (
+        text
+        and text.strip().lower().startswith("/start")
+        and chat_id
+        and chat_type == "private"
+    ):
         send_message(chat_id, LINKGUARD_MSG, parse_mode="HTML")
         return "ok"
 
     # ✅ Anti-link protection in groups
-    if chat_type in ["group", "supergroup"] and text:
-        if contains_link(text):
+    if chat_type in ["group", "supergroup"]:
+        # Normal link detection
+        if text and contains_link(text):
             if not is_admin(chat_id, user_id):
                 delete_message(chat_id, message_id)
                 send_message(chat_id, ANTILINK_MSG, parse_mode="HTML")
 
+        # Forwarded messages (check if it has forward_from or forward_from_chat)
+        if ("forward_from" in msg or "forward_from_chat" in msg) and not is_admin(chat_id, user_id):
+            delete_message(chat_id, message_id)
+            send_message(chat_id, ANTIFWD_MSG, parse_mode="HTML")
+
     return "ok"
 
-# ---------- Set webhook (only once when starting locally/deploying) ----------
+# ---------- Set webhook ----------
 
 def set_webhook():
     url = f"https://ai-link.onrender.com/webhook/{WEBHOOK_SECRET}"
