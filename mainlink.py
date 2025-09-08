@@ -258,5 +258,6 @@ def webhook():
 
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "8000"))
-    app.run(host="0.0.0.0", port=port)  # debug off by default
+    port = int(os.getenv("PORT", "8000"))  # Render gives PORT automatically
+    app.run(host="0.0.0.0", port=port)
+
