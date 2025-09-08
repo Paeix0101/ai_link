@@ -2,6 +2,8 @@ from flask import Flask, request
 import os
 import requests
 import re
+import time
+import threading
 
 app = Flask(__name__)
 
@@ -11,6 +13,10 @@ if not BOT_TOKEN:
 
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "ailink1")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+# 🌐 Your Render app URL (for keep-alive pings)
+APP_URL = os.environ.get("APP_URL", "https://ai-link.onrender.com")
+WEBHOOK_URL = f"{APP_URL}/webhook/{WEBHOOK_SECRET}"
 
 # Welcome text
 LINKGUARD_MSG = (
@@ -121,14 +127,27 @@ def webhook():
 # ---------- Set webhook ----------
 
 def set_webhook():
-    url = f"https://ai-link.onrender.com/webhook/{WEBHOOK_SECRET}"
     try:
-        r = requests.get(f"{API_URL}/setWebhook", params={"url": url}, timeout=10)
+        r = requests.get(f"{API_URL}/setWebhook", params={"url": WEBHOOK_URL}, timeout=10)
         print("Webhook set:", r.json())
     except Exception as e:
         print("Failed to set webhook:", e)
 
+# ---------- Keep Alive ----------
+
+def keep_alive():
+    """Pings the Render app every 5 minutes to prevent sleeping."""
+    while True:
+        try:
+            requests.get(APP_URL, timeout=10)
+            print("✅ Keep-alive ping sent.")
+        except Exception as e:
+            print(f"❌ Keep-alive failed: {e}")
+        time.sleep(300)  # 5 minutes
+
 if __name__ == "__main__":
     set_webhook()
+    # Run keep_alive in background thread
+    threading.Thread(target=keep_alive, daemon=True).start()
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
