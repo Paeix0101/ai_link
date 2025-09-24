@@ -2,14 +2,21 @@ from flask import Flask, request
 import os
 import requests
 import re
+import threading
+import time
 
 app = Flask(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
 if not BOT_TOKEN:
     raise SystemExit("Missing BOT_TOKEN environment variable")
+
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "ailink1")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
+
+# ✅ Your deployed app base URL
+BASE_URL = "https://ai-link.onrender.com"
+WEBHOOK_URL = f"{BASE_URL}/webhook/{WEBHOOK_SECRET}"
 
 # Your personal Telegram ID (where logs will be sent)
 OWNER_ID = 7514171886
@@ -92,7 +99,7 @@ def is_forbidden_forward(msg: dict) -> bool:
             return True
     return False
 
-# ---------- Webhook ----------
+# ---------- Routes ----------
 @app.route(f"/webhook/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     data = request.get_json(force=True, silent=True)
@@ -143,16 +150,35 @@ def webhook():
                     return "ok"
     return "ok"
 
+@app.route("/ping")
+def ping():
+    return "pong", 200
+
 # ---------- Set webhook ----------
 def set_webhook():
-    url = f"https://ai-link.onrender.com/webhook/{WEBHOOK_SECRET}"
     try:
-        r = requests.get(f"{API_URL}/setWebhook", params={"url": url}, timeout=10)
+        r = requests.get(f"{API_URL}/setWebhook", params={"url": WEBHOOK_URL}, timeout=10)
         print("Webhook set:", r.json())
     except Exception as e:
         print("Failed to set webhook:", e)
 
+# ---------- Keep Alive ----------
+def keep_alive():
+    """Pings the Render app every 5 minutes to prevent sleeping."""
+    while True:
+        try:
+            requests.get(f"{BASE_URL}/ping", timeout=10)
+            print("✅ Keep-alive ping sent.")
+        except Exception as e:
+            print(f"❌ Keep-alive failed: {e}")
+        time.sleep(300)  # 5 minutes
+
+# ---------- Main ----------
 if __name__ == "__main__":
     set_webhook()
+
+    # ✅ Start keep-alive thread
+    threading.Thread(target=keep_alive, daemon=True).start()
+
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
