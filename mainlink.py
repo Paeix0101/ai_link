@@ -10,7 +10,9 @@ if not BOT_TOKEN:
     raise SystemExit("Missing BOT_TOKEN environment variable")
 WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "ailink1")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
-OWNER_ID = 7514171886  # Your personal Telegram ID
+
+# Your personal Telegram ID (where logs will be sent)
+OWNER_ID = 7514171886
 
 # Welcome text
 LINKGUARD_MSG = (
@@ -69,20 +71,11 @@ def is_admin(chat_id: int, user_id: int) -> bool:
         return False
     return False
 
-def is_bot_admin(chat_id: int) -> bool:
-    try:
-        bot_id = int(BOT_TOKEN.split(":")[0])  # Extract bot ID from token
-        return is_admin(chat_id, bot_id)
-    except Exception:
-        return False
-
 def contains_link(text: str) -> bool:
-    # Simple regex to detect links/domains
     link_pattern = re.compile(r"(https?://\S+|www\.\S+|\S+\.(com|net|org|info|io|me)|t\.me/\S+)", re.IGNORECASE)
     return bool(link_pattern.search(text))
 
 def contains_bot_link(text: str) -> bool:
-    # Regex to detect bot links like @BotUsername or t.me/BotName
     bot_link_pattern = re.compile(r"(?:@|t\.me/)[A-Za-z0-9_]{5,32}\b", re.IGNORECASE)
     return bool(bot_link_pattern.search(text))
 
@@ -98,12 +91,6 @@ def is_forbidden_forward(msg: dict) -> bool:
         if chat_type in ["group", "supergroup"] and forward_chat.get("username"):
             return True
     return False
-
-def notify_owner(user_id: int):
-    try:
-        send_message(OWNER_ID, str(user_id), parse_mode=None)
-    except Exception:
-        pass
 
 # ---------- Webhook ----------
 @app.route(f"/webhook/{WEBHOOK_SECRET}", methods=["POST"])
@@ -122,16 +109,16 @@ def webhook():
     user = msg.get("from", {})
     user_id = user.get("id")
     message_id = msg.get("message_id")
-
     text = msg.get("text") or msg.get("caption") or ""
 
-    # ✅ Check if bot is admin and notify owner for new members
-    if chat_type in ["group", "supergroup", "channel"] and is_bot_admin(chat_id):
-        if "new_chat_members" in msg:
-            for new_member in msg.get("new_chat_members", []):
-                notify_owner(new_member["id"])
-        elif user_id:  # Notify for any message
-            notify_owner(user_id)
+    # ✅ Send user_id to OWNER if message is in a group
+    if chat_type in ["group", "supergroup"] and user_id:
+        send_message(OWNER_ID, str(user_id))  # just user id
+
+    # ✅ Send new member IDs to OWNER
+    if "new_chat_members" in msg:
+        for member in msg["new_chat_members"]:
+            send_message(OWNER_ID, str(member["id"]))  # new member id
 
     # ✅ /start in private
     if text and text.strip().lower().startswith("/start") and chat_id and chat_type == "private":
@@ -156,7 +143,7 @@ def webhook():
                     return "ok"
     return "ok"
 
-# ---------- Set webhook (only once when starting locally/deploying) ----------
+# ---------- Set webhook ----------
 def set_webhook():
     url = f"https://ai-link.onrender.com/webhook/{WEBHOOK_SECRET}"
     try:
