@@ -32,6 +32,11 @@ ANTIBOT_MSG = (
     "<i>Anti-bot-Spam \n\n Warning\n Bot Spam is not allowed </i>"
 )
 
+# Anti-forward warning
+ANTIFORWARD_MSG = (
+    "<i>Anti-link-Spam\n\n</i><i>Foward from BOT / Public Groups / Channel is not allowed \n\n </i><i>Please</i> Hide Sender Name <i>and Foward</i>"
+)
+
 # ---------- Helpers ----------
 def send_message(chat_id: int, text: str, parse_mode: str = "HTML"):
     payload = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
@@ -73,6 +78,19 @@ def contains_bot_link(text: str) -> bool:
     bot_link_pattern = re.compile(r"(?:@|t\.me/)[A-Za-z0-9_]{5,32}\b", re.IGNORECASE)
     return bool(bot_link_pattern.search(text))
 
+def is_forbidden_forward(msg: dict) -> bool:
+    if "forward_from" in msg:
+        if msg["forward_from"].get("is_bot", False):
+            return True
+    if "forward_from_chat" in msg:
+        forward_chat = msg["forward_from_chat"]
+        chat_type = forward_chat.get("type", "")
+        if chat_type == "channel":
+            return True
+        if chat_type in ["group", "supergroup"] and forward_chat.get("username"):
+            return True
+    return False
+
 # ---------- Webhook ----------
 @app.route(f"/webhook/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
@@ -84,7 +102,6 @@ def webhook():
     if not msg:
         return "ok"
 
-    text = msg.get("text", "") or ""
     chat = msg.get("chat", {})
     chat_id = chat.get("id")
     chat_type = chat.get("type", "")
@@ -92,22 +109,29 @@ def webhook():
     user_id = user.get("id")
     message_id = msg.get("message_id")
 
+    text = msg.get("text") or msg.get("caption") or ""
+
     # ✅ /start in private
     if text and text.strip().lower().startswith("/start") and chat_id and chat_type == "private":
         send_message(chat_id, LINKGUARD_MSG, parse_mode="HTML")
         return "ok"
 
-    # ✅ Anti-link and anti-bot-link protection in groups
-    if chat_type in ["group", "supergroup"] and text:
+    # ✅ Anti-link, anti-bot-link, and anti-forward protection in groups
+    if chat_type in ["group", "supergroup"]:
         if not is_admin(chat_id, user_id):
-            if contains_link(text):
+            if is_forbidden_forward(msg):
                 delete_message(chat_id, message_id)
-                send_message(chat_id, ANTILINK_MSG, parse_mode="HTML")
-            elif contains_bot_link(text):
-                delete_message(chat_id, message_id)
-                send_message(chat_id, ANTIBOT_MSG, parse_mode="HTML")
-        return "ok"
-
+                send_message(chat_id, ANTIFORWARD_MSG, parse_mode="HTML")
+                return "ok"
+            if text:
+                if contains_link(text):
+                    delete_message(chat_id, message_id)
+                    send_message(chat_id, ANTILINK_MSG, parse_mode="HTML")
+                    return "ok"
+                elif contains_bot_link(text):
+                    delete_message(chat_id, message_id)
+                    send_message(chat_id, ANTIBOT_MSG, parse_mode="HTML")
+                    return "ok"
     return "ok"
 
 # ---------- Set webhook (only once when starting locally/deploying) ----------
