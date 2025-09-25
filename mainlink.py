@@ -42,7 +42,7 @@ ANTIBOT_MSG = (
 )
 
 ANTIFORWARD_MSG = (
-    "<i>Anti-link-Spam\n\n</i><i>Foward from BOT / Public Groups / Channel is not allowed \n\n </i><i>Please</i> Hide Sender Name <i>and Foward</i>"
+    "<i>Anti-link-Spam\n\n</i><i>Forward from BOT / Public Groups / Channel is not allowed \n\n </i><i>Please</i> Hide Sender Name <i>and Forward</i>"
 )
 
 # ---------- Helpers ----------
@@ -81,14 +81,18 @@ def is_admin(chat_id: int, user_id: int) -> bool:
     return False
 
 def contains_link(text: str) -> bool:
+    if not text:
+        return False
     link_pattern = re.compile(r"(https?://\S+|www\.\S+|\S+\.(com|net|org|info|io|me)|t\.me/\S+)", re.IGNORECASE)
     return bool(link_pattern.search(text))
 
 def contains_bot_link(text: str) -> bool:
     """
     Detects bot usernames/links but allows normal @usernames.
+    Only flags when mention/url ends with 'bot' (case-insensitive).
     """
-    # Match only usernames/links ending with 'bot'
+    if not text:
+        return False
     bot_link_pattern = re.compile(r"(?:@|t\.me/)[A-Za-z0-9_]*bot\b", re.IGNORECASE)
     return bool(bot_link_pattern.search(text))
 
@@ -105,11 +109,37 @@ def is_forbidden_forward(msg: dict) -> bool:
             return True
     return False
 
+def has_forbidden_button(msg: dict) -> bool:
+    """
+    Check inline keyboard buttons (reply_markup.inline_keyboard).
+    If any button contains a URL with t.me/ or looks like a bot link, return True.
+    """
+    reply_markup = msg.get("reply_markup")
+    if not reply_markup:
+        return False
+
+    # inline_keyboard is a list of rows, where each row is a list of button dicts
+    inline_kb = reply_markup.get("inline_keyboard", [])
+    for row in inline_kb:
+        for button in row:
+            # check URL
+            url = button.get("url", "") or ""
+            if url:
+                u = url.lower()
+                if "t.me/" in u or u.endswith("bot"):
+                    return True
+            # sometimes button text itself may contain a link or mention
+            text = button.get("text", "") or ""
+            if text:
+                if contains_link(text) or contains_bot_link(text):
+                    return True
+    return False
+
 # ---------- Routes ----------
 @app.route(f"/webhook/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     data = request.get_json(force=True, silent=True)
-    print("📩 Update:", data)  # Debug log
+    print("📩 Update:", data)  # Debug log for debugging in Render logs
     if not data:
         return "ok"
 
@@ -120,32 +150,42 @@ def webhook():
     chat = msg.get("chat", {})
     chat_id = chat.get("id")
     chat_type = chat.get("type", "")
-    user = msg.get("from", {})
+    user = msg.get("from", {}) or {}
     user_id = user.get("id")
     message_id = msg.get("message_id")
     text = msg.get("text") or msg.get("caption") or ""
 
-    # ✅ Send user_id to OWNER if message is in a group
+    # Send user_id to OWNER if message is in a group (for logging)
     if chat_type in ["group", "supergroup"] and user_id:
         send_message(OWNER_ID, str(user_id))
 
-    # ✅ Send new member IDs to OWNER
+    # Send new member IDs to OWNER
     if "new_chat_members" in msg:
         for member in msg["new_chat_members"]:
-            send_message(OWNER_ID, str(member["id"]))
+            send_message(OWNER_ID, str(member.get("id")))
 
-    # ✅ /start in private
+    # /start in private
     if text and text.strip().lower().startswith("/start") and chat_id and chat_type == "private":
         send_message(chat_id, LINKGUARD_MSG, parse_mode="HTML")
         return "ok"
 
-    # ✅ Anti-link, anti-bot-link, and anti-forward protection in groups
+    # Group protections
     if chat_type in ["group", "supergroup"]:
+        # allow admins to be exempt from automated deletions (optional)
         if not is_admin(chat_id, user_id):
+            # 1) inline-button check
+            if has_forbidden_button(msg):
+                delete_message(chat_id, message_id)
+                send_message(chat_id, ANTILINK_MSG, parse_mode="HTML")
+                return "ok"
+
+            # 2) forbidden forward (bots / channels / public groups with username)
             if is_forbidden_forward(msg):
                 delete_message(chat_id, message_id)
                 send_message(chat_id, ANTIFORWARD_MSG, parse_mode="HTML")
                 return "ok"
+
+            # 3) text/caption checks for links or bot mentions
             if text:
                 if contains_link(text):
                     delete_message(chat_id, message_id)
@@ -155,6 +195,7 @@ def webhook():
                     delete_message(chat_id, message_id)
                     send_message(chat_id, ANTIBOT_MSG, parse_mode="HTML")
                     return "ok"
+
     return "ok"
 
 @app.route("/ping")
@@ -173,7 +214,7 @@ def set_webhook():
 
 # ---------- Keep Alive ----------
 def keep_alive():
-    """Pings the app every 5 minutes to prevent Render sleeping."""
+    """Pings the app every 5 minutes to reduce sleeping (works only if pings originate externally)."""
     while True:
         try:
             requests.get(f"{BASE_URL}/ping", timeout=10)
