@@ -19,7 +19,7 @@ API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 BASE_URL = "https://ai-link-ni1c.onrender.com"
 WEBHOOK_URL = f"{BASE_URL}/webhook/{WEBHOOK_SECRET}"
 
-# Owner Telegram ID (updated)
+# Owner Telegram ID
 OWNER_ID = 8405313334
 
 # ---------- Messages ----------
@@ -46,8 +46,8 @@ ANTIFORWARD_MSG = (
 )
 
 INLINE_BUTTON_WARNING = (
-    "<b>⚠️ Warning!</b>\n"
-    "Inline buttons with external links are not allowed in this group."
+    "<i>Anti-Bot-Spam</i>\n\n"
+    "<i>Links with inline-Button are not allowed in this group</i>"
 )
 
 # ---------- Helpers ----------
@@ -86,16 +86,14 @@ def is_admin(chat_id: int, user_id: int) -> bool:
     return False
 
 def contains_link(text: str) -> bool:
-    link_pattern = re.compile(
-        r"(https?://\S+|www\.\S+|\S+\.(com|net|org|info|io|me)|t\.me/\S+)",
-        re.IGNORECASE,
-    )
+    if not text:
+        return False
+    link_pattern = re.compile(r"(https?://\S+|www\.\S+|\S+\.(com|net|org|info|io|me)|t\.me/\S+)", re.IGNORECASE)
     return bool(link_pattern.search(text))
 
 def contains_bot_link(text: str) -> bool:
-    """
-    Detects bot usernames/links but allows normal @usernames.
-    """
+    if not text:
+        return False
     bot_link_pattern = re.compile(r"(?:@|t\.me/)[A-Za-z0-9_]*bot\b", re.IGNORECASE)
     return bool(bot_link_pattern.search(text))
 
@@ -113,22 +111,35 @@ def is_forbidden_forward(msg: dict) -> bool:
     return False
 
 def has_forbidden_button(msg: dict) -> bool:
-    """
-    Detect inline keyboard buttons with URLs.
-    """
-    reply_markup = msg.get("reply_markup", {})
-    inline_keyboard = reply_markup.get("inline_keyboard", [])
-    for row in inline_keyboard:
+    reply_markup = msg.get("reply_markup") or {}
+    inline_kb = reply_markup.get("inline_keyboard", [])
+    for row in inline_kb:
         for button in row:
-            if "url" in button:
+            url = (button.get("url") or "").strip()
+            if url:
+                u = url.lower()
+                if u.startswith("http://") or u.startswith("https://") or "t.me/" in u or u.endswith("bot"):
+                    return True
+            btn_text = (button.get("text") or "")
+            if btn_text and (contains_link(btn_text) or contains_bot_link(btn_text)):
                 return True
+
+    entities = msg.get("entities", []) or []
+    caption_entities = msg.get("caption_entities", []) or []
+    for e in entities + caption_entities:
+        if e.get("type") == "text_link":
+            url = (e.get("url") or "").lower()
+            if url and (url.startswith("http://") or url.startswith("https://") or "t.me/" in url or url.endswith("bot")):
+                return True
+        if e.get("type") == "url":
+            return True
     return False
 
 # ---------- Routes ----------
 @app.route(f"/webhook/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     data = request.get_json(force=True, silent=True)
-    print("📩 Update:", data)  # Debug log
+    print("📩 Update:", data)
     if not data:
         return "ok"
 
@@ -136,53 +147,45 @@ def webhook():
     if not msg:
         return "ok"
 
-    chat = msg.get("chat", {})
+    chat = msg.get("chat", {}) or {}
     chat_id = chat.get("id")
     chat_type = chat.get("type", "")
-    user = msg.get("from", {})
+    user = msg.get("from", {}) or {}
     user_id = user.get("id")
     message_id = msg.get("message_id")
     text = msg.get("text") or msg.get("caption") or ""
 
-    # ✅ Send user_id to OWNER if message is in a group
-    if chat_type in ["group", "supergroup"] and user_id:
-        send_message(OWNER_ID, str(user_id))
-
-    # ✅ Send new member IDs to OWNER
-    if "new_chat_members" in msg:
-        for member in msg["new_chat_members"]:
-            send_message(OWNER_ID, str(member["id"]))
-
-    # ✅ /start in private
-    if text and text.strip().lower().startswith("/start") and chat_id and chat_type == "private":
-        send_message(chat_id, LINKGUARD_MSG, parse_mode="HTML")
+    # /start in private
+    if text and text.strip().lower().startswith("/start") and chat_type == "private":
+        send_message(chat_id, LINKGUARD_MSG)
         return "ok"
 
-    # ✅ Anti-link, anti-bot-link, anti-forward, inline-button protection in groups
     if chat_type in ["group", "supergroup"]:
         if not is_admin(chat_id, user_id) and str(user_id) != str(OWNER_ID):
-            # Inline button spam
             if has_forbidden_button(msg):
-                send_message(chat_id, INLINE_BUTTON_WARNING, parse_mode="HTML")
                 delete_message(chat_id, message_id)
+                time.sleep(0.3)  # small delay to avoid race condition
+                send_message(chat_id, INLINE_BUTTON_WARNING)
                 return "ok"
 
-            # Forwarded content spam
             if is_forbidden_forward(msg):
-                send_message(chat_id, ANTIFORWARD_MSG, parse_mode="HTML")
                 delete_message(chat_id, message_id)
+                time.sleep(0.3)
+                send_message(chat_id, ANTIFORWARD_MSG)
                 return "ok"
 
-            # Text/caption checks
             if text:
                 if contains_link(text):
-                    send_message(chat_id, ANTILINK_MSG, parse_mode="HTML")
                     delete_message(chat_id, message_id)
+                    time.sleep(0.3)
+                    send_message(chat_id, ANTILINK_MSG)
                     return "ok"
                 elif contains_bot_link(text):
-                    send_message(chat_id, ANTIBOT_MSG, parse_mode="HTML")
                     delete_message(chat_id, message_id)
+                    time.sleep(0.3)
+                    send_message(chat_id, ANTIBOT_MSG)
                     return "ok"
+
     return "ok"
 
 @app.route("/ping")
@@ -192,7 +195,6 @@ def ping():
 # ---------- Set webhook ----------
 def set_webhook():
     try:
-        # Remove old webhook first
         requests.get(f"{API_URL}/deleteWebhook", timeout=10)
         r = requests.get(f"{API_URL}/setWebhook", params={"url": WEBHOOK_URL}, timeout=10)
         print("✅ Webhook set:", r.json())
@@ -201,21 +203,17 @@ def set_webhook():
 
 # ---------- Keep Alive ----------
 def keep_alive():
-    """Pings the app every 5 minutes to prevent Render sleeping."""
     while True:
         try:
             requests.get(f"{BASE_URL}/ping", timeout=10)
             print("✅ Keep-alive ping sent.")
         except Exception as e:
             print("❌ Keep-alive failed:", e)
-        time.sleep(300)  # 5 minutes
+        time.sleep(300)
 
 # ---------- Main ----------
 if __name__ == "__main__":
     set_webhook()
-
-    # Start keep-alive thread
     threading.Thread(target=keep_alive, daemon=True).start()
-
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
