@@ -46,8 +46,7 @@ ANTIFORWARD_MSG = (
 )
 
 INLINE_BUTTON_WARNING = (
-    "<i>Anti-Bot-Spam</i>\n\n"
-    "<i>Links with inline-Button are not allowed in this group</i>"
+    "<i>⚠️ Inline Button Links are not allowed in this group.</i>"
 )
 
 # ---------- Helpers ----------
@@ -163,27 +162,27 @@ def webhook():
     if chat_type in ["group", "supergroup"]:
         if not is_admin(chat_id, user_id) and str(user_id) != str(OWNER_ID):
             if has_forbidden_button(msg):
-                delete_message(chat_id, message_id)
-                time.sleep(0.3)  # small delay to avoid race condition
                 send_message(chat_id, INLINE_BUTTON_WARNING)
+                time.sleep(0.3)
+                delete_message(chat_id, message_id)
                 return "ok"
 
             if is_forbidden_forward(msg):
-                delete_message(chat_id, message_id)
-                time.sleep(0.3)
                 send_message(chat_id, ANTIFORWARD_MSG)
+                time.sleep(0.3)
+                delete_message(chat_id, message_id)
                 return "ok"
 
             if text:
                 if contains_link(text):
-                    delete_message(chat_id, message_id)
-                    time.sleep(0.3)
                     send_message(chat_id, ANTILINK_MSG)
+                    time.sleep(0.3)
+                    delete_message(chat_id, message_id)
                     return "ok"
                 elif contains_bot_link(text):
-                    delete_message(chat_id, message_id)
-                    time.sleep(0.3)
                     send_message(chat_id, ANTIBOT_MSG)
+                    time.sleep(0.3)
+                    delete_message(chat_id, message_id)
                     return "ok"
 
     return "ok"
