@@ -20,7 +20,7 @@ BASE_URL = "https://ai-link-ni1c.onrender.com"
 WEBHOOK_URL = f"{BASE_URL}/webhook/{WEBHOOK_SECRET}"
 
 # Owner Telegram ID (updated)
-OWNER_ID = 8141547148
+OWNER_ID = 8405313334
 
 # ---------- Messages ----------
 LINKGUARD_MSG = (
@@ -85,7 +85,11 @@ def contains_link(text: str) -> bool:
     return bool(link_pattern.search(text))
 
 def contains_bot_link(text: str) -> bool:
-    bot_link_pattern = re.compile(r"(?:@|t\.me/)[A-Za-z0-9_]{5,32}\b", re.IGNORECASE)
+    """
+    Detects bot usernames/links but allows normal @usernames.
+    """
+    # Match only usernames/links ending with 'bot'
+    bot_link_pattern = re.compile(r"(?:@|t\.me/)[A-Za-z0-9_]*bot\b", re.IGNORECASE)
     return bool(bot_link_pattern.search(text))
 
 def is_forbidden_forward(msg: dict) -> bool:
