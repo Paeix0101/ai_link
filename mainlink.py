@@ -38,36 +38,32 @@ ANTILINK_MSG = (
 )
 
 ANTIBOT_MSG = (
-    "<i>Anti-bot-Spam \n\n Warning\n Bot Spam is not allowed </i>"
+    "<i>Anti-bot-Spam </i>\n\n<i>Warning: Bot Spam is not allowed</i>"
 )
 
 ANTIFORWARD_MSG = (
-    "<i>Anti-link-Spam\n\n</i><i>Forward from BOT / Public Groups / Channel is not allowed \n\n </i><i>Please</i> Hide Sender Name <i>and Forward</i>"
+    "<i>Anti-link-Spam</i>\n\n<i>Forward from BOT / Public Groups / Channel is not allowed </i>\n\n<i>Please hide sender name and forward again</i>"
 )
 
-INLINE_BUTTON_WARNING = (
-    "<i>⚠️ Inline Button Links are not allowed in this group.</i>"
+INLINE_BUTTON_MSG = (
+    "<i>Anti-Bot-Spam</i>\n\n<i>Links with inline-Button is not allowed in group</i>"
 )
 
 # ---------- Helpers ----------
 def send_message(chat_id: int, text: str, parse_mode: str = "HTML"):
     payload = {"chat_id": chat_id, "text": text, "parse_mode": parse_mode}
     try:
-        r = requests.post(f"{API_URL}/sendMessage", json=payload, timeout=10)
-        if not r.ok:
-            print("❌ Failed to send message:", r.text)
+        requests.post(f"{API_URL}/sendMessage", json=payload, timeout=10)
     except Exception as e:
         print("❌ send_message error:", e)
 
 def delete_message(chat_id: int, message_id: int):
     try:
-        r = requests.post(
+        requests.post(
             f"{API_URL}/deleteMessage",
             json={"chat_id": chat_id, "message_id": message_id},
             timeout=10,
         )
-        if not r.ok:
-            print("❌ Failed to delete message:", r.text)
     except Exception as e:
         print("❌ delete_message error:", e)
 
@@ -109,36 +105,22 @@ def is_forbidden_forward(msg: dict) -> bool:
             return True
     return False
 
-def has_forbidden_button(msg: dict) -> bool:
-    reply_markup = msg.get("reply_markup") or {}
-    inline_kb = reply_markup.get("inline_keyboard", [])
-    for row in inline_kb:
+def has_inline_button(msg: dict) -> bool:
+    reply_markup = msg.get("reply_markup")
+    if not reply_markup:
+        return False
+    inline_keyboard = reply_markup.get("inline_keyboard", [])
+    for row in inline_keyboard:
         for button in row:
-            url = (button.get("url") or "").strip()
-            if url:
-                u = url.lower()
-                if u.startswith("http://") or u.startswith("https://") or "t.me/" in u or u.endswith("bot"):
-                    return True
-            btn_text = (button.get("text") or "")
-            if btn_text and (contains_link(btn_text) or contains_bot_link(btn_text)):
+            url = button.get("url")
+            if url and (url.startswith("http://") or url.startswith("https://") or "t.me/" in url):
                 return True
-
-    entities = msg.get("entities", []) or []
-    caption_entities = msg.get("caption_entities", []) or []
-    for e in entities + caption_entities:
-        if e.get("type") == "text_link":
-            url = (e.get("url") or "").lower()
-            if url and (url.startswith("http://") or url.startswith("https://") or "t.me/" in url or url.endswith("bot")):
-                return True
-        if e.get("type") == "url":
-            return True
     return False
 
 # ---------- Routes ----------
 @app.route(f"/webhook/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     data = request.get_json(force=True, silent=True)
-    print("📩 Update:", data)
     if not data:
         return "ok"
 
@@ -146,10 +128,10 @@ def webhook():
     if not msg:
         return "ok"
 
-    chat = msg.get("chat", {}) or {}
+    chat = msg.get("chat", {})
     chat_id = chat.get("id")
     chat_type = chat.get("type", "")
-    user = msg.get("from", {}) or {}
+    user = msg.get("from", {})
     user_id = user.get("id")
     message_id = msg.get("message_id")
     text = msg.get("text") or msg.get("caption") or ""
@@ -161,12 +143,14 @@ def webhook():
 
     if chat_type in ["group", "supergroup"]:
         if not is_admin(chat_id, user_id) and str(user_id) != str(OWNER_ID):
-            if has_forbidden_button(msg):
-                send_message(chat_id, INLINE_BUTTON_WARNING)
+            # Inline button detection
+            if has_inline_button(msg):
+                send_message(chat_id, INLINE_BUTTON_MSG)
                 time.sleep(0.3)
                 delete_message(chat_id, message_id)
                 return "ok"
 
+            # Forbidden forward
             if is_forbidden_forward(msg):
                 send_message(chat_id, ANTIFORWARD_MSG)
                 time.sleep(0.3)
