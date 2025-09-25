@@ -2,6 +2,8 @@ from flask import Flask, request
 import os
 import requests
 import re
+import threading
+import time
 
 app = Flask(__name__)
 
@@ -14,7 +16,7 @@ WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "ailink1")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 # ✅ Your deployed app base URL
-BASE_URL = "https://ai-link.onrender.com"
+BASE_URL = "https://ai-link-ni1c.onrender.com"
 WEBHOOK_URL = f"{BASE_URL}/webhook/{WEBHOOK_SECRET}"
 
 # Owner Telegram ID (updated)
@@ -103,6 +105,7 @@ def is_forbidden_forward(msg: dict) -> bool:
 @app.route(f"/webhook/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     data = request.get_json(force=True, silent=True)
+    print("📩 Update:", data)  # Debug log
     if not data:
         return "ok"
 
@@ -164,8 +167,23 @@ def set_webhook():
     except Exception as e:
         print("❌ Failed to set webhook:", e)
 
+# ---------- Keep Alive ----------
+def keep_alive():
+    """Pings the app every 5 minutes to prevent Render sleeping."""
+    while True:
+        try:
+            requests.get(f"{BASE_URL}/ping", timeout=10)
+            print("✅ Keep-alive ping sent.")
+        except Exception as e:
+            print("❌ Keep-alive failed:", e)
+        time.sleep(300)  # 5 minutes
+
 # ---------- Main ----------
 if __name__ == "__main__":
     set_webhook()
+
+    # Start keep-alive thread
+    threading.Thread(target=keep_alive, daemon=True).start()
+
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
