@@ -20,7 +20,7 @@ BASE_URL = "https://ai-link-ni1c.onrender.com"
 WEBHOOK_URL = f"{BASE_URL}/webhook/{WEBHOOK_SECRET}"
 
 # Owner Telegram ID
-OWNER_ID = 5490749551
+OWNER_ID = 8405313334
 
 # ---------- Messages ----------
 LINKGUARD_MSG = (
@@ -170,14 +170,12 @@ def webhook():
 
     # Send user_id to OWNER if message is in a group
     if chat_type in ["group", "supergroup"] and user_id:
-        send_message(OWNER_ID, f"User ID: {user_id} sent a message in group {chat_id}")
+        send_message(OWNER_ID, str(user_id))
 
     # Send new member IDs to OWNER
     if "new_chat_members" in msg:
         for member in msg["new_chat_members"]:
-            member_id = member.get("id")
-            member_name = member.get("first_name", "Unknown")
-            send_message(OWNER_ID, f"New member joined group {chat_id}: User ID: {member_id}, Name: {member_name}")
+            send_message(OWNER_ID, str(member.get("id")))
 
     # /start in private
     if text and text.strip().lower().startswith("/start") and chat_id and chat_type == "private":
