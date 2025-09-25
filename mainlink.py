@@ -19,7 +19,7 @@ API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 BASE_URL = "https://ai-link-ni1c.onrender.com"
 WEBHOOK_URL = f"{BASE_URL}/webhook/{WEBHOOK_SECRET}"
 
-# Owner Telegram ID (updated)
+# Owner Telegram ID
 OWNER_ID = 8405313334
 
 # ---------- Messages ----------
@@ -42,8 +42,11 @@ ANTIBOT_MSG = (
 )
 
 ANTIFORWARD_MSG = (
-    "<i>Anti-link-Spam\n\n</i><i>Forward from BOT / Public Groups / Channel is not allowed \n\n </i><i>Please</i> Hide Sender Name <i>and Forward</i>"
+    "<i>Anti-link-Spam\n\n</i><i>Foward from BOT / Public Groups / Channel is not allowed \n\n </i><i>Please</i> Hide Sender Name <i>and Foward</i>"
 )
+
+# Warning message for inline-button links (exact text user requested)
+INLINE_BUTTON_WARNING = "<i>Anti-Bot-Spam</i>\n\n<i>Links with inline-Button is not allowed in group</i>"
 
 # ---------- Helpers ----------
 def send_message(chat_id: int, text: str, parse_mode: str = "HTML"):
@@ -112,23 +115,24 @@ def is_forbidden_forward(msg: dict) -> bool:
 def has_forbidden_button(msg: dict) -> bool:
     """
     Check inline keyboard buttons (reply_markup.inline_keyboard).
-    If any button contains a URL with t.me/ or looks like a bot link, return True.
+    If any button contains a URL with http/https/t.me/ or looks like a bot link, return True.
+    Also checks button text for links or bot mentions.
     """
     reply_markup = msg.get("reply_markup")
     if not reply_markup:
         return False
 
-    # inline_keyboard is a list of rows, where each row is a list of button dicts
     inline_kb = reply_markup.get("inline_keyboard", [])
     for row in inline_kb:
         for button in row:
-            # check URL
+            # Check 'url' property of the button
             url = button.get("url", "") or ""
             if url:
                 u = url.lower()
-                if "t.me/" in u or u.endswith("bot"):
+                # flag if url contains t.me/ or is an http(s) link or ends with bot
+                if "t.me/" in u or u.startswith("http://") or u.startswith("https://") or u.endswith("bot"):
                     return True
-            # sometimes button text itself may contain a link or mention
+            # Check if button text contains links or bot mentions
             text = button.get("text", "") or ""
             if text:
                 if contains_link(text) or contains_bot_link(text):
@@ -139,7 +143,7 @@ def has_forbidden_button(msg: dict) -> bool:
 @app.route(f"/webhook/{WEBHOOK_SECRET}", methods=["POST"])
 def webhook():
     data = request.get_json(force=True, silent=True)
-    print("📩 Update:", data)  # Debug log for debugging in Render logs
+    print("📩 Update:", data)  # Debug log for Render logs
     if not data:
         return "ok"
 
@@ -171,15 +175,15 @@ def webhook():
 
     # Group protections
     if chat_type in ["group", "supergroup"]:
-        # allow admins to be exempt from automated deletions (optional)
+        # Exempt admins (they won't be auto-deleted)
         if not is_admin(chat_id, user_id):
-            # 1) inline-button check
+            # 1) inline-button check (priority)
             if has_forbidden_button(msg):
                 delete_message(chat_id, message_id)
-                send_message(chat_id, ANTILINK_MSG, parse_mode="HTML")
+                send_message(chat_id, INLINE_BUTTON_WARNING, parse_mode="HTML")
                 return "ok"
 
-            # 2) forbidden forward (bots / channels / public groups with username)
+            # 2) forbidden forwards (bots/channels/public groups)
             if is_forbidden_forward(msg):
                 delete_message(chat_id, message_id)
                 send_message(chat_id, ANTIFORWARD_MSG, parse_mode="HTML")
@@ -214,7 +218,7 @@ def set_webhook():
 
 # ---------- Keep Alive ----------
 def keep_alive():
-    """Pings the app every 5 minutes to reduce sleeping (works only if pings originate externally)."""
+    """Pings the app every 5 minutes to reduce sleeping (works only if pings come from outside)."""
     while True:
         try:
             requests.get(f"{BASE_URL}/ping", timeout=10)
