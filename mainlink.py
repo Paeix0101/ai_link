@@ -25,20 +25,21 @@ OWNER_ID = 8405313334
 # ---------- Messages ----------
 LINKGUARD_MSG = (
     "<b>LinkGuard — Active ✨</b>\n\n"
-    "<i>• This bot removes links sent by members</i>\n"
+    "<i> Remove inline - button links</i>"
+    "<i>• This bot removes all types of links sent by members</i>\n"
     "<i>• Admins / Owner are allowed to send links</i>\n"
     "<i>• Removes bot spam automatically</i>\n\n"
     "⚠️ <i>Make this bot an admin (can_delete_messages) so it can protect the group.</i>"
 )
 
 ANTILINK_MSG = (
-    "<b>Anti Link Spam </b>\n"
+    "<b>Anti Link Spam </b> @Anti_link_spam_bot \n"
     "<i>Hidden and Non hidden links are not allowed in this group </i>\n"
-    "Please contact an admin for any queries"
+    "<i>Please contact an admin for any queries</i>"
 )
 
 ANTIBOT_MSG = (
-    "<i>Anti-bot-Spam \n\n Warning\n Bot Spam is not allowed </i>"
+    "<i>Anti-bot-Spam @Anti_link_spam_bot \n\n Warning\n Bot Spam is not allowed </i>"
 )
 
 ANTIFORWARD_MSG = (
@@ -46,7 +47,7 @@ ANTIFORWARD_MSG = (
 )
 
 # Warning message for inline-button links
-INLINE_BUTTON_WARNING = "<i>Anti-Bot-Spam</i>\n\n<i>Links with inline-Button is not allowed in group</i>"
+INLINE_BUTTON_WARNING = "<i>Anti-Bot-Spam @Anti_link_spam_bot </i>\n\n<i>Links with inline-Button is not allowed in group</i>\n <i>Contact an admin for any queries</i>"
 
 # ---------- Helpers ----------
 def send_message(chat_id: int, text: str, parse_mode: str = "HTML"):
@@ -200,13 +201,13 @@ def webhook():
 
             # 3) Text/caption checks for links or bot mentions
             if text:
-                if contains_link(text):
-                    delete_message(chat_id, message_id)
-                    send_message(chat_id, ANTILINK_MSG, parse_mode="HTML")
-                    return "ok"
-                elif contains_bot_link(text):
+                if contains_bot_link(text):
                     delete_message(chat_id, message_id)
                     send_message(chat_id, ANTIBOT_MSG, parse_mode="HTML")
+                    return "ok"
+                elif contains_link(text):
+                    delete_message(chat_id, message_id)
+                    send_message(chat_id, ANTILINK_MSG, parse_mode="HTML")
                     return "ok"
 
     return "ok"
