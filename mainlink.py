@@ -43,11 +43,11 @@ ANTIBOT_MSG = (
 )
 
 ANTIFORWARD_MSG = (
-    "<i>Anti-link-Spam\n\n</i><i>Foward from BOT / Public Groups / Channel is not allowed \n\n </i><i>Please</i> Hide Sender Name <i>and Foward</i>"
+    "<i>Anti-link-Spam @Anti_link_spam_bot \n\n</i><i>Foward from BOT / Public Groups / Channel is not allowed \n\n </i><i>Please</i> Hide Sender Name <i>and Foward</i>"
 )
 
 # Warning message for inline-button links
-INLINE_BUTTON_WARNING = "<i>Anti-Bot-Spam @Anti_link_spam_bot </i>\n\n<i>Links with inline-Button is not allowed in group</i>\n <i>Contact an admin for any queries</i>"
+INLINE_BUTTON_WARNING = "<i>Anti-link-Spam @Anti_link_spam_bot </i>\n\n<i>Links with / without inline-Button is not allowed in group</i>\n <i>Contact an admin for any queries</i>"
 
 # ---------- Helpers ----------
 def send_message(chat_id: int, text: str, parse_mode: str = "HTML"):
