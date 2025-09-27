@@ -24,11 +24,11 @@ OWNER_ID = 8405313334
 
 # ---------- Messages ----------
 LINKGUARD_MSG = (
-    "<b>LinkGuard — Active ✨</b>\n\n"
-    "<i> Remove inline - button links</i>"
-    "<i>• This bot removes all types of links sent by members</i>\n"
-    "<i>• Admins / Owner are allowed to send links</i>\n"
-    "<i>• Removes bot spam automatically</i>\n\n"
+    "<b>🔗Anti-link-spam-bot </b>\n\n"
+    "<i>🚫 Remove inline - button links</i>"
+    "<i>🔒This bot removes all types of links sent by members</i>\n"
+    "<i>🛡️Admins / Owner are allowed to send links</i>\n"
+    "<i>🤖 Removes bot spam automatically</i>\n\n"
     "⚠️ <i>Make this bot an admin (can_delete_messages) so it can protect the group.</i>"
 )
 
