@@ -16,7 +16,7 @@ WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "ailink1")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 # ✅ Your deployed app base URL
-BASE_URL = "https://ai-link-ni1c.onrender.com"
+BASE_URL = "https://ai-link-tvxz.onrender.com"
 WEBHOOK_URL = f"{BASE_URL}/webhook/{WEBHOOK_SECRET}"
 
 # Owner Telegram ID
